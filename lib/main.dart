@@ -3,43 +3,25 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 // Import for iOS features.
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
-// #enddocregion platform_imports
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: ThemeData.light().copyWith(
-          appBarTheme: AppBarTheme(
-        iconTheme: IconThemeData(color: Colors.black87),
-      )),
-      themeMode: ThemeMode.light,
-      home: const HomePage(),
-    );
-  }
+  State<MyApp> createState() => _MyAppState();
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  late WebViewController _controller;
-
-  late TextEditingController _textEditingController;
+class _MyAppState extends State<MyApp> {
+  WebViewController _controller = WebViewController();
+  late bool isSubmitted;
 
   @override
   void initState() {
-    _textEditingController = TextEditingController(text: "https://www.google.com");
+    isSubmitted = false;
+
+    // #docregion platform_features
     late final PlatformWebViewControllerCreationParams params;
 
     if (WebViewPlatform.instance is WebKitWebViewPlatform) {
@@ -52,117 +34,114 @@ class _HomePageState extends State<HomePage> {
     }
 
     final WebViewController controller = WebViewController.fromPlatformCreationParams(params);
+    // #enddocregion platform_features
 
     controller
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {
-            debugPrint('----WebView is loading (progress : $progress%)');
-          },
-          onPageStarted: (String url) {
-            debugPrint('---Page started loading: $url');
-          },
-          onPageFinished: (String url) {
-            debugPrint('---Page finished loading: $url');
-          },
-          onWebResourceError: (WebResourceError error) {
-            debugPrint('''---
-                        Page resource error:
-                        code: ${error.errorCode}
-                        description: ${error.description}
-                        errorType: ${error.errorType}
-                        isForMainFrame: ${error.isForMainFrame}
-                      ''');
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('https://www.youtube.com/')) {
-              debugPrint('---blocking navigation to ${request.url}');
-              return NavigationDecision.prevent;
-            }
-            debugPrint('---allowing navigation to ${request.url}');
-            return NavigationDecision.navigate;
-          },
-          onUrlChange: (UrlChange change) {
-            if (change.url != null) {
-              setState(() {
-                _textEditingController.text = change.url!;
-              });
-            }
-
-            debugPrint('---url change to ${change.url}');
-          },
-        ),
-      )
       ..addJavaScriptChannel(
-        'Toaster',
-        onMessageReceived: (JavaScriptMessage message) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("--javaScripMessage: " + message.message)),
-          );
+        "Toaster",
+        onMessageReceived: (p0) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("java script channel message: ${p0.message}"),
+            action: SnackBarAction(
+                label: "Ok",
+                onPressed: () {
+                  Navigator.pop(context);
+                }),
+          ));
         },
       )
-      ..loadRequest(Uri.parse(_textEditingController.text));
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          print("onNavigationRequest.isMainFrame: ${request.isMainFrame}");
 
-    if (controller.platform is AndroidWebViewController) {
-      AndroidWebViewController.enableDebugging(true);
-      (controller.platform as AndroidWebViewController).setMediaPlaybackRequiresUserGesture(false);
-    }
+          print("onNavigationRequest.url: ${request.url}");
+
+          return NavigationDecision.navigate;
+        },
+        onPageStarted: (url) {
+          print("onPageStarted: $url");
+        },
+        onPageFinished: (url) {
+          print("onPageFinished: $url");
+          if (isSubmitted) {
+            _controller.loadRequest(Uri.parse("https://www.facebook.com/"));
+            isSubmitted = false;
+          }
+        },
+        onUrlChange: (change) {
+          print("onUrlChange: ${change.url}");
+        },
+        onProgress: (progress) {
+          print("onProgress: ${progress}");
+        },
+        onWebResourceError: (error) {
+          print("onWebResourceError.description: ${error.description}");
+          print("onWebResourceError.errorCode: ${error.errorCode}");
+          print("onWebResourceError.errorType: ${error.errorType}");
+          print("onWebResourceError.isForMainFrame: ${error.isForMainFrame}");
+        },
+      ))
+      ..loadRequest(Uri.parse("https://amazon.com"));
 
     _controller = controller;
-
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        leadingWidth: 25,
-        elevation: 1,
-        leading: IconButton(onPressed: () {}, icon: Icon(Icons.home_outlined)),
-        title: _textField(),
-        actions: [
-          IconButton(
-              onPressed: () {},
-              icon: Icon(
-                Icons.add,
-              )),
-          IconButton(
-              onPressed: () {},
-              icon: Icon(
-                Icons.layers_rounded,
-              )),
-          PopupMenuButton(
-            icon: Icon(Icons.more_vert),
-            itemBuilder: (context) {
-              return [];
-            },
-          )
-        ],
-      ),
-      body: WebViewWidget(controller: _controller),
-    );
-  }
+    return MaterialApp(
+      title: 'WebView Example',
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('WebView Example'),
+          actions: [
+            IconButton(onPressed: () => _controller.reload(), icon: const Icon(Icons.replay_outlined)),
+          ],
+        ),
+        body: WebViewWidget(controller: _controller),
+        floatingActionButton: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              onPressed: () async {
+                final email = "erdgn54@gmail.com";
+                final password = "Ec78cf84";
 
-  Widget _textField() {
-    return TextField(
-      controller: _textEditingController,
-      maxLines: 1,
-      onSubmitted: (value) {
-        setState(() {
-          _controller.loadRequest(Uri(scheme: "https", host: "youtube"));
+                _controller.runJavaScript("document.getElementById('m_login_email').value='$email'");
+                _controller.runJavaScript("document.getElementById('m_login_password').value='$password'");
+                await Future.delayed(Duration(seconds: 1));
+                await _controller.runJavaScript("document.forms[1].submit()");
+                setState(() {
+                  isSubmitted = true;
+                });
+              },
+              child: const Icon(Icons.login_rounded),
+            ),
+            SizedBox(width: 10),
+            FloatingActionButton(
+              onPressed: () async {
+                final url = await _controller.currentUrl();
+                if (url?.contains("www.amazon.com") ?? false) {
+                  final res = await _controller
+                      .runJavaScriptReturningResult("document.getElementsByTagName('header')[0].style.display='none'");
+                  print("javaScriptReturn result: $res");
 
-          // _controller.loadRequest(Uri.parse(value));
-        });
-      },
-      decoration: InputDecoration(
-        contentPadding: EdgeInsets.only(left: 10, right: 10),
-        border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(20)),
-        filled: true,
-        fillColor: Colors.grey.shade200,
+                  _controller.runJavaScript("document.getElementsByTagName('footer')[0].style.display='none'");
+                }
+              },
+              child: const Icon(Icons.fiber_dvr_sharp),
+            ),
+            SizedBox(width: 10),
+            FloatingActionButton(
+              onPressed: () async {
+                _controller.loadRequest(
+                    Uri.parse("https://m.facebook.com/login/?wtsid=rdr_0kCZO15Eu1EGwwV9k&refsrc=deprecated&_rdr"));
+              },
+              child: const Icon(Icons.arrow_forward_ios),
+            ),
+          ],
+        ),
       ),
     );
   }
