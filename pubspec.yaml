@@ -37,6 +37,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   webview_flutter: ^4.2.1
   path_provider: ^2.0.15
+  flutter_expandable_fab: ^2.2.0
 
 dev_dependencies:
   flutter_test:
